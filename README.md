@@ -22,23 +22,15 @@ data:
   start_date: "2026-08-03"
 ```
 
-SAPN's NEM12 timestamps carry no daylight saving, but they may be on NEM market time (UTC+10) or Adelaide standard time (UTC+9:30). That half hour moves every tariff boundary, so let a bill decide. Run this twice, once per basis:
+Time zones need no setting. AEMO's file format puts NEM12 timestamps on NEM time (UTC+10) all year, with no daylight saving, in every state. The integration converts them to Home Assistant's own time zone, so tariff windows follow Adelaide clock time, including after the switch to daylight saving.
+
+To check the result against a GloBird bill, set the dates to the bill's period:
 
 ```yaml
 action: sapn.bill_report
 data:
-  start_date: "2026-08-31"   # your bill's period
+  start_date: "2026-08-31"
   end_date: "2026-09-27"
-  nem12_tz: "+10:00"
-```
-
-Set the dates to one of your GloBird bills. The right basis reproduces that invoice line for line: every kWh quantity, the ZeroHero days, the GST and the total. If `+09:30` wins, set it under the integration's **Configure**, then rebuild the history from stored data:
-
-```yaml
-action: sapn.fetch
-data:
-  start_date: "2026-08-03"
-  download: false
 ```
 
 ## What it creates
@@ -67,7 +59,7 @@ Two diagnostic sensors show **Data up to** and **Last successful import**. The s
 
 ## Schedule and settings
 
-It runs two minutes after start-up and at 10:15 and 22:15, re-importing the last 7 days each time so SAPN's corrections replace estimated reads. **Configure** changes the times, the re-import window and the timestamp basis. It keeps 400 days of interval data in `.storage`, so reports and rebuilds need no download.
+It runs two minutes after start-up and at 10:15 and 22:15, re-importing the last 7 days each time so SAPN's corrections replace estimated reads. **Configure** changes the times and the re-import window. It keeps 400 days of interval data in `.storage`, so reports and rebuilds need no download.
 
 If SAPN rejects the stored password, Home Assistant raises a repair asking you to sign in again. Home Assistant keeps the password in the config entry, as it does for every integration that signs in to a cloud account, so give SAPN a password you use nowhere else.
 

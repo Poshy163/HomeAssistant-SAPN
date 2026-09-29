@@ -32,12 +32,10 @@
       "init": {
         "title": "SAPN import settings",
         "data": {
-          "nem12_tz": "NEM12 timestamp basis",
           "days_back": "Days re-imported on each run",
           "run_times": "Run times"
         },
         "data_description": {
-          "nem12_tz": "UTC offset of SAPN's NEM12 timestamps. Run the bill report under both and keep the one that matches your invoice.",
           "days_back": "Each scheduled run re-imports this many days, so SAPN's corrections replace estimated reads.",
           "run_times": "Local times to fetch, comma separated, for example 10:15,22:15."
         }
@@ -60,7 +58,7 @@
       "fields": {
         "config_entry_id": { "name": "Meter", "description": "Needed only with more than one SAPN meter." },
         "start_date": { "name": "Start date", "description": "First local date to import. Leave empty to re-import the last few days." },
-        "download": { "name": "Download", "description": "Turn off to rebuild the statistics from data already stored, for example after changing the timestamp basis." }
+        "download": { "name": "Download", "description": "Turn off to rebuild the statistics from data already stored, for example after editing the plan rates." }
       }
     },
     "import_file": {
@@ -77,8 +75,7 @@
       "fields": {
         "config_entry_id": { "name": "Meter", "description": "Needed only with more than one SAPN meter." },
         "start_date": { "name": "Start date", "description": "First day of the billing period." },
-        "end_date": { "name": "End date", "description": "Last day of the billing period." },
-        "nem12_tz": { "name": "NEM12 timestamp basis", "description": "Override the configured basis for this report only." }
+        "end_date": { "name": "End date", "description": "Last day of the billing period." }
       }
     }
   }

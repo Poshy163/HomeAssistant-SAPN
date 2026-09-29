@@ -22,13 +22,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_call_later, async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
-from .const import (
-    CONF_RUN_TIMES,
-    DEFAULT_RUN_TIMES,
-    DOMAIN,
-    NEM12_TZ_OPTIONS,
-    STARTUP_DELAY_SECONDS,
-)
+from .const import CONF_RUN_TIMES, DEFAULT_RUN_TIMES, DOMAIN, STARTUP_DELAY_SECONDS
 from .coordinator import SapnCoordinator, parse_run_times
 from .nem12 import Nem12Error
 from .portal import SapnError
@@ -58,7 +52,6 @@ BILL_REPORT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ENTRY): cv.string,
         vol.Required("start_date"): cv.date,
         vol.Required("end_date"): cv.date,
-        vol.Optional("nem12_tz"): vol.In(NEM12_TZ_OPTIONS),
     }
 )
 
@@ -112,9 +105,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         last: date = call.data["end_date"]
         if last < first:
             raise ServiceValidationError("end_date is before start_date")
-        report: dict[str, Any] = await coordinator.async_bill_report(
-            first, last, call.data.get("nem12_tz")
-        )
+        report: dict[str, Any] = await coordinator.async_bill_report(first, last)
         return report
 
     hass.services.async_register(DOMAIN, SERVICE_FETCH, fetch, schema=FETCH_SCHEMA)

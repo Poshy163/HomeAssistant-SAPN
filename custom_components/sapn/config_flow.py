@@ -29,14 +29,11 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_DAYS_BACK,
-    CONF_NEM12_TZ,
     CONF_NMI,
     CONF_RUN_TIMES,
     DEFAULT_DAYS_BACK,
-    DEFAULT_NEM12_TZ,
     DEFAULT_RUN_TIMES,
     DOMAIN,
-    NEM12_TZ_OPTIONS,
 )
 from .coordinator import parse_run_times
 from .portal import SapnAuthError, SapnError, login_and_list_nmis
@@ -148,7 +145,7 @@ class SapnConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SapnOptionsFlow(OptionsFlow):
-    """Timestamp basis, re-import window and schedule."""
+    """Re-import window and schedule."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -163,9 +160,6 @@ class SapnOptionsFlow(OptionsFlow):
         options = self.config_entry.options
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_NEM12_TZ, default=options.get(CONF_NEM12_TZ, DEFAULT_NEM12_TZ)
-                ): SelectSelector(SelectSelectorConfig(options=NEM12_TZ_OPTIONS)),
                 vol.Required(
                     CONF_DAYS_BACK, default=options.get(CONF_DAYS_BACK, DEFAULT_DAYS_BACK)
                 ): NumberSelector(

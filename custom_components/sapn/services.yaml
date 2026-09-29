@@ -36,9 +36,3 @@ bill_report:
       required: true
       selector:
         date:
-    nem12_tz:
-      selector:
-        select:
-          options:
-            - "+10:00"
-            - "+09:30"

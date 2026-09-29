@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -17,13 +16,12 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DAYS_BACK,
-    CONF_NEM12_TZ,
     CONF_NMI,
     DEFAULT_DAYS_BACK,
-    DEFAULT_NEM12_TZ,
     DOMAIN,
     EXPORT_SUFFIX,
     IMPORT_SUFFIX,
+    NEM_TIME,
     STORE_RETENTION_DAYS,
     STORE_VERSION,
 )
@@ -36,15 +34,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def parse_offset(value: str) -> tzinfo:
-    """Parse a fixed UTC offset such as +10:00."""
-    match = re.fullmatch(r"([+-])(\d{1,2}):(\d{2})", value.strip())
-    if not match:
-        raise ValueError(f"Invalid UTC offset {value!r}")
-    sign = 1 if match.group(1) == "+" else -1
-    return timezone(sign * timedelta(hours=int(match.group(2)), minutes=int(match.group(3))))
 
 
 def parse_run_times(value: str) -> list[time]:
@@ -90,10 +79,6 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
         self._lock = asyncio.Lock()
 
     @property
-    def nem12_tz(self) -> tzinfo:
-        return parse_offset(self.config_entry.options.get(CONF_NEM12_TZ, DEFAULT_NEM12_TZ))
-
-    @property
     def days_back(self) -> int:
         return int(self.config_entry.options.get(CONF_DAYS_BACK, DEFAULT_DAYS_BACK))
 
@@ -116,7 +101,7 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
             for index in range(len(entry["imp"]) - 1, -1, -1):
                 if entry["imp"][index] is not None or entry["exp"][index] is not None:
                     naive = datetime.combine(date.fromisoformat(day_iso), time()) + (index + 1) * step
-                    end = naive.replace(tzinfo=self.nem12_tz).astimezone(UTC)
+                    end = naive.replace(tzinfo=NEM_TIME).astimezone(UTC)
                     latest = end if latest is None or end > latest else latest
                     break
         return latest
@@ -143,9 +128,9 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
         return min(days), max(days)
 
     def _intervals(
-        self, first: date | None, last: date | None, tz: tzinfo
+        self, first: date | None, last: date | None
     ) -> list[tuple[datetime, float, float]]:
-        """Cached intervals whose NEM12 date falls in [first, last]."""
+        """Cached intervals whose NEM12 date falls in [first, last], as UTC starts."""
         out: list[tuple[datetime, float, float]] = []
         for day_iso in sorted(self._days):
             day = date.fromisoformat(day_iso)
@@ -157,7 +142,7 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
             for index, (imp, exp) in enumerate(zip(entry["imp"], entry["exp"], strict=True)):
                 if imp is None and exp is None:
                     continue
-                start = (midnight + index * step).replace(tzinfo=tz).astimezone(UTC)
+                start = (midnight + index * step).replace(tzinfo=NEM_TIME).astimezone(UTC)
                 out.append((start, imp or 0.0, exp or 0.0))
         return out
 
@@ -220,7 +205,7 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
             return self.status
 
     async def _async_import_from(self, start: date, local_tz: tzinfo) -> None:
-        intervals = self._intervals(start - timedelta(days=2), None, self.nem12_tz)
+        intervals = self._intervals(start - timedelta(days=2), None)
         if not intervals:
             raise SapnError(f"No cached SAPN data from {start}")
         priced = price_intervals(intervals, local_tz)
@@ -236,16 +221,10 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
             result[2], self.nmi, result[0].isoformat(), result[1].isoformat(),
         )
 
-    async def async_bill_report(
-        self, first: date, last: date, nem12_tz: str | None = None
-    ) -> dict[str, Any]:
+    async def async_bill_report(self, first: date, last: date) -> dict[str, Any]:
         """Rebuild a billing period from the cache."""
-        tz = parse_offset(nem12_tz) if nem12_tz else self.nem12_tz
         local_tz = dt_util.get_default_time_zone()
-        intervals = self._intervals(first - timedelta(days=1), last + timedelta(days=1), tz)
+        intervals = self._intervals(first - timedelta(days=1), last + timedelta(days=1))
         report = bill_report(price_intervals(intervals, local_tz), first, last, local_tz)
-        offset = tz.utcoffset(None)
-        hours, rem = divmod(int(offset.total_seconds()) if offset else 0, 3600)
         report["nmi"] = self.nmi
-        report["nem12_tz"] = f"{'+' if hours >= 0 else '-'}{abs(hours):02d}:{rem // 60:02d}"
         return report

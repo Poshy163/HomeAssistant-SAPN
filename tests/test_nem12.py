@@ -18,7 +18,7 @@ def test_file_without_header_reads_as_nem12(nem12_text):
 
 
 def test_byte_order_mark_is_ignored(nem12_text):
-    assert channel_values("﻿" + nem12_text) == channel_values(nem12_text)
+    assert channel_values("\ufeff" + nem12_text) == channel_values(nem12_text)
 
 
 @pytest.mark.parametrize(

@@ -12,8 +12,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.recorder.common import async_wait_recording_done
 
-from custom_components.sapn.const import ALL_STATS, CONF_NMI, DOMAIN
-from custom_components.sapn.coordinator import parse_offset
+from custom_components.sapn.const import ALL_STATS, CONF_NMI, DOMAIN, NEM_TIME
 from custom_components.sapn.importer import statistic_id
 from custom_components.sapn.nem12 import nem12_days, parse_nem12
 from custom_components.sapn.portal import SapnAuthError
@@ -24,15 +23,14 @@ NMI = "20012345678"
 FETCH = "custom_components.sapn.coordinator.fetch_nem12"
 
 
-def engine(text: str, tz: str = "+10:00"):
-    offset = parse_offset(tz)
+def engine(text: str):
     intervals = []
     for day, entry in nem12_days(parse_nem12(text), NMI, "E1", "B1").items():
         for index, (imp, exp) in enumerate(zip(entry["imp"], entry["exp"], strict=True)):
             if imp is None and exp is None:
                 continue
             naive = datetime.combine(day, datetime.min.time()) + timedelta(minutes=index * entry["step"])
-            intervals.append((naive.replace(tzinfo=offset).astimezone(UTC), imp or 0.0, exp or 0.0))
+            intervals.append((naive.replace(tzinfo=NEM_TIME).astimezone(UTC), imp or 0.0, exp or 0.0))
     return price_intervals(intervals, ADL)
 
 
@@ -133,18 +131,38 @@ async def test_import_file_rejects_paths_outside_allowlist(hass, entry, tmp_path
         await hass.services.async_call(DOMAIN, "import_file", {"path": str(outside)}, blocking=True)
 
 
-async def test_bill_report_matches_engine_under_both_timestamp_bases(hass, entry, nem12_text):
+async def test_bill_report_matches_engine(hass, entry, nem12_text):
     await backfill(hass, nem12_text)
-    for tz in ("+10:00", "+09:30"):
+    response = await hass.services.async_call(
+        DOMAIN, "bill_report", {"start_date": "2026-08-31", "end_date": "2026-09-27"},
+        blocking=True, return_response=True,
+    )
+    expected = bill_report(engine(nem12_text), date(2026, 8, 31), date(2026, 9, 27), ADL)
+    assert {k: v for k, v in response.items() if k != "nmi"} == expected
+    assert response["days"] == 28 and response["incomplete_days"] == []
+
+
+async def test_nem12_stays_on_nem_time_through_daylight_saving(hass, entry):
+    """NEM12 is UTC+10 all year; Adelaide is UTC+9:30, then UTC+10:30 from 4 Oct.
+
+    One kWh sits half an hour either side of the 16:00 peak boundary in NEM12
+    time. Read as NEM time it lands in shoulder before daylight saving and in
+    peak after it. Reading it as local time or as UTC+9:30 gets one day wrong.
+    """
+    rows = ["100,NEM12,202610060000,SAPN,GLOBIRD", "200,2001234567,E1B1,E1,E1,N1,900000001,kWh,30,"]
+    for day, slot in (("20260928", 32), ("20261005", 31)):  # 16:00 and 15:30 NEM time
+        values = ["0"] * 48
+        values[slot] = "1.0"
+        rows.append(f"300,{day},{','.join(values)},A,,,20261006000000,")
+    await backfill(hass, "\n".join([*rows, "900"]) + "\n")
+    for day, band in (("2026-09-28", "Shoulder Usage"), ("2026-10-05", "Peak Usage")):
         response = await hass.services.async_call(
-            DOMAIN, "bill_report",
-            {"start_date": "2026-08-31", "end_date": "2026-09-27", "nem12_tz": tz},
+            DOMAIN, "bill_report", {"start_date": day, "end_date": day},
             blocking=True, return_response=True,
         )
-        expected = bill_report(engine(nem12_text, tz), date(2026, 8, 31), date(2026, 9, 27), ADL)
-        assert {k: v for k, v in response.items() if k not in ("nmi", "nem12_tz")} == expected
-        assert response["nem12_tz"] == tz
-        assert response["days"] == 28 and response["incomplete_days"] == []
+        quantities = {line["description"]: line["quantity"] for line in response["lines"]}
+        assert quantities[band] == 1.0, (day, quantities)
+        assert quantities["Peak Usage"] + quantities["Shoulder Usage"] == 1.0, (day, quantities)
 
 
 async def test_sensors_report_data_and_success(hass, entry, nem12_text):

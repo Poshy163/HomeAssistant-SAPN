@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import timedelta, timezone
 from typing import Final
 
 DOMAIN: Final = "sapn"
 
 CONF_NMI: Final = "nmi"
-CONF_NEM12_TZ: Final = "nem12_tz"
 CONF_DAYS_BACK: Final = "days_back"
 CONF_RUN_TIMES: Final = "run_times"
 
-NEM12_TZ_OPTIONS: Final = ["+10:00", "+09:30"]
-DEFAULT_NEM12_TZ: Final = "+10:00"
+# AEMO's meter data file format puts NEM12 interval times on NEM time (AEST,
+# UTC+10) all year, with no daylight saving, in every NEM state including SA.
+# Local tariff windows come from Home Assistant's time zone instead.
+NEM_TIME: Final = timezone(timedelta(hours=10), "AEST")
+
 DEFAULT_DAYS_BACK: Final = 7
 DEFAULT_RUN_TIMES: Final = "10:15,22:15"
 STARTUP_DELAY_SECONDS: Final = 120
