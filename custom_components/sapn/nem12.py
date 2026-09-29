@@ -30,14 +30,24 @@ class Channel:
 
 
 def parse_nem12(text: str) -> list[Channel]:
-    """Parse NEM12 text into energy channels keyed by naive interval start."""
+    """Parse NEM12 text into energy channels keyed by naive interval start.
+
+    A file without a 100 header is read as NEM12, as nemreader does when not
+    strict (the mode sapnmeterdata used). SAPN's portal download fails a strict
+    header check.
+    """
     channels: dict[tuple[str, str, int], Channel] = {}
     current: tuple[Channel, float] | None = None
-    saw_header = False
+    saw_header = saw_channel = False
+    first_record: str | None = None
     for row in csv.reader(io.StringIO(text)):
-        if not row or not row[0].strip():
+        if not row:
             continue
-        record = row[0].strip()
+        record = row[0].replace("\ufeff", "").strip()
+        if not record:
+            continue
+        if first_record is None:
+            first_record = record
         if record == "100":
             saw_header = True
             if len(row) > 1 and row[1].strip().upper() != "NEM12":
@@ -45,6 +55,7 @@ def parse_nem12(text: str) -> list[Channel]:
         elif record == "200":
             if len(row) < 9:
                 raise Nem12Error("Malformed 200 record")
+            saw_channel = True
             factor = UOM_TO_KWH.get(row[7].strip().upper())
             try:
                 interval = int(row[8])
@@ -73,8 +84,12 @@ def parse_nem12(text: str) -> list[Channel]:
                     channel.values[day + index * step] = float(raw) * factor
         elif record == "900":
             break
-    if not saw_header:
-        raise Nem12Error("No NEM12 100 header record")
+    if not saw_header and not saw_channel:
+        if first_record is None:
+            raise Nem12Error("The NEM12 data is empty")
+        raise Nem12Error(
+            f"Not NEM12 data: no 100 or 200 record (first field {first_record[:20]!r})"
+        )
     return list(channels.values())
 
 
