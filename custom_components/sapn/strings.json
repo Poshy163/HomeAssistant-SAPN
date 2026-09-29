@@ -1,0 +1,85 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SA Power Networks meter data",
+        "description": "Sign in with your SAPN Your Meter Data login.",
+        "data": { "email": "Email", "password": "Password" }
+      },
+      "nmi": {
+        "title": "Choose a meter",
+        "data": { "nmi": "NMI" }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to SAPN again",
+        "description": "SAPN rejected the saved password for {email}.",
+        "data": { "password": "Password" }
+      }
+    },
+    "error": {
+      "invalid_auth": "SAPN rejected the email or password, or asked for an extra verification step.",
+      "cannot_connect": "Could not reach the SAPN portal.",
+      "no_nmis": "This SAPN account has no meters.",
+      "unknown": "Unexpected error. Check the Home Assistant log."
+    },
+    "abort": {
+      "already_configured": "This meter is already set up.",
+      "reauth_successful": "Signed in to SAPN again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SAPN import settings",
+        "data": {
+          "nem12_tz": "NEM12 timestamp basis",
+          "days_back": "Days re-imported on each run",
+          "run_times": "Run times"
+        },
+        "data_description": {
+          "nem12_tz": "UTC offset of SAPN's NEM12 timestamps. Run the bill report under both and keep the one that matches your invoice.",
+          "days_back": "Each scheduled run re-imports this many days, so SAPN's corrections replace estimated reads.",
+          "run_times": "Local times to fetch, comma separated, for example 10:15,22:15."
+        }
+      }
+    },
+    "error": {
+      "invalid_run_times": "Use HH:MM values separated by commas, for example 10:15,22:15."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "data_through": { "name": "Data up to" },
+      "last_success": { "name": "Last successful import" }
+    }
+  },
+  "services": {
+    "fetch": {
+      "name": "Fetch meter data",
+      "description": "Download interval data from SAPN and import it into long-term statistics.",
+      "fields": {
+        "config_entry_id": { "name": "Meter", "description": "Needed only with more than one SAPN meter." },
+        "start_date": { "name": "Start date", "description": "First local date to import. Leave empty to re-import the last few days." },
+        "download": { "name": "Download", "description": "Turn off to rebuild the statistics from data already stored, for example after changing the timestamp basis." }
+      }
+    },
+    "import_file": {
+      "name": "Import NEM12 file",
+      "description": "Import a NEM12 CSV you downloaded from the SAPN portal.",
+      "fields": {
+        "config_entry_id": { "name": "Meter", "description": "Needed only with more than one SAPN meter." },
+        "path": { "name": "Path", "description": "Full path to the file, under /media." }
+      }
+    },
+    "bill_report": {
+      "name": "Bill report",
+      "description": "Rebuild GloBird's invoice lines, GST and ZeroHero days for a billing period from stored SAPN data.",
+      "fields": {
+        "config_entry_id": { "name": "Meter", "description": "Needed only with more than one SAPN meter." },
+        "start_date": { "name": "Start date", "description": "First day of the billing period." },
+        "end_date": { "name": "End date", "description": "Last day of the billing period." },
+        "nem12_tz": { "name": "NEM12 timestamp basis", "description": "Override the configured basis for this report only." }
+      }
+    }
+  }
+}

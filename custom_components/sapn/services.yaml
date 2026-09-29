@@ -1,0 +1,44 @@
+fetch:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: sapn
+    start_date:
+      selector:
+        date:
+    download:
+      default: true
+      selector:
+        boolean:
+import_file:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: sapn
+    path:
+      required: true
+      example: /media/sapn/NEM12.csv
+      selector:
+        text:
+bill_report:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: sapn
+    start_date:
+      required: true
+      selector:
+        date:
+    end_date:
+      required: true
+      selector:
+        date:
+    nem12_tz:
+      selector:
+        select:
+          options:
+            - "+10:00"
+            - "+09:30"
