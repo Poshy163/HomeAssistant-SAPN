@@ -17,6 +17,7 @@ from .const import (
     FIT_WINDOW,
     GST_DIVISOR,
     IMPORT_BANDS,
+    NEM_TIME,
     SHOULDER_RATE,
     SUPER_DAILY_CAP_KWH,
     SUPER_TOPUP,
@@ -171,16 +172,20 @@ def hourly_increments(data: PricedData, local_tz: tzinfo) -> dict[datetime, dict
     return hours
 
 
-def expected_intervals(day: date, local_tz: tzinfo, step: timedelta) -> int:
-    """Intervals in a local day, allowing for 23 and 25 hour DST days."""
-    length = local_midnight(day + timedelta(days=1), local_tz) - local_midnight(day, local_tz)
-    return int(round(length / step))
+def nem_date(moment: datetime) -> date:
+    """The NEM12 date an interval starting at `moment` is filed under."""
+    return moment.astimezone(NEM_TIME).date()
 
 
-def bill_report(data: PricedData, first: date, last: date, local_tz: tzinfo) -> dict[str, Any]:
-    """Rebuild GloBird's invoice lines, GST and ZeroHero days for a period."""
+def bill_report(data: PricedData, first: date, last: date) -> dict[str, Any]:
+    """Rebuild GloBird's invoice lines, GST and ZeroHero days for a period.
+
+    GloBird bills whole NEM12 dates, midnight to midnight in NEM time (23:30 to
+    23:30 in Adelaide outside daylight saving), and prices each interval by local
+    clock time. ZeroHero days are local dates.
+    """
     days = (last - first).days + 1
-    part = [i for i in data.intervals if first <= i.day <= last]
+    part = [i for i in data.intervals if first <= nem_date(i.utc) <= last]
 
     def total(key: str) -> float:
         return round(sum(i.values[key] for i in part), 2)
@@ -219,12 +224,12 @@ def bill_report(data: PricedData, first: date, last: date, local_tz: tzinfo) -> 
         - sum(round(q * r / GST_DIVISOR, 2) for q, r in charged),
         2,
     )
-    counts = Counter(i.day for i in part)
+    counts = Counter(nem_date(i.utc) for i in part)
+    per_day = int(round(timedelta(days=1) / data.step))  # NEM time has no daylight saving
     incomplete = [
         (first + timedelta(days=n)).isoformat()
         for n in range(days)
-        if counts.get(first + timedelta(days=n), 0)
-        < expected_intervals(first + timedelta(days=n), local_tz, data.step)
+        if counts.get(first + timedelta(days=n), 0) < per_day
     ]
     missed = [
         {"date": d.isoformat(), "hour": v.worst_hour, "kwh": v.hours.get(v.worst_hour, 0.0)}

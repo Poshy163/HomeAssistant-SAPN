@@ -65,7 +65,7 @@ If SAPN rejects the stored password, Home Assistant raises a repair asking you t
 
 Rates and windows live in `custom_components/sapn/const.py`. Edit them when GloBird changes the plan. Windows follow local clock time, so daylight saving needs no change unless GloBird moves the windows. Your bill labels the free window "Offpeak Usage - Step 1"; if a Step 2 line appears, GloBird has capped it and `const.py` needs the cap.
 
-Home Assistant stores hourly statistics on UTC hours, which run from :30 to :30 in Adelaide, so daily figures in Home Assistant shift by half an hour at midnight. `sapn.bill_report` works from the raw intervals and matches the bill exactly.
+GloBird bills whole NEM12 dates, midnight to midnight in NEM time: 23:30 to 23:30 in Adelaide, or 00:30 to 00:30 during daylight saving. `sapn.bill_report` uses the same dates and works from the raw intervals. Home Assistant keeps hourly statistics on UTC hours, which line up with NEM12 dates, so the statistics can be summed over exactly the same period.
 
 ## Development
 

@@ -225,6 +225,6 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
         """Rebuild a billing period from the cache."""
         local_tz = dt_util.get_default_time_zone()
         intervals = self._intervals(first - timedelta(days=1), last + timedelta(days=1))
-        report = bill_report(price_intervals(intervals, local_tz), first, last, local_tz)
+        report = bill_report(price_intervals(intervals, local_tz), first, last)
         report["nmi"] = self.nmi
         return report

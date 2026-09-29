@@ -46,6 +46,17 @@ def slice_nem12(text: str, first: str | None = None, last: str | None = None) ->
     return "\n".join(out) + "\n"
 
 
+def tiny_nem12(readings: dict[str, dict[int, float]]) -> str:
+    """A 30-minute E1-only NEM12 file: {YYYYMMDD: {slot: kWh}}, other slots zero."""
+    rows = ["100,NEM12,202610060000,SAPN,GLOBIRD", "200,2001234567,E1B1,E1,E1,N1,900000001,kWh,30,"]
+    for day, slots in readings.items():
+        values = ["0"] * 48
+        for slot, kwh in slots.items():
+            values[slot] = str(kwh)
+        rows.append(f"300,{day},{','.join(values)},A,,,20261006000000,")
+    return "\n".join([*rows, "900"]) + "\n"
+
+
 async def all_sums(hass, key: str) -> list[tuple[float, float]]:
     sid = statistic_id(NMI, key)
     rows = await get_instance(hass).async_add_executor_job(
@@ -137,7 +148,7 @@ async def test_bill_report_matches_engine(hass, entry, nem12_text):
         DOMAIN, "bill_report", {"start_date": "2026-08-31", "end_date": "2026-09-27"},
         blocking=True, return_response=True,
     )
-    expected = bill_report(engine(nem12_text), date(2026, 8, 31), date(2026, 9, 27), ADL)
+    expected = bill_report(engine(nem12_text), date(2026, 8, 31), date(2026, 9, 27))
     assert {k: v for k, v in response.items() if k != "nmi"} == expected
     assert response["days"] == 28 and response["incomplete_days"] == []
 
@@ -149,12 +160,7 @@ async def test_nem12_stays_on_nem_time_through_daylight_saving(hass, entry):
     time. Read as NEM time it lands in shoulder before daylight saving and in
     peak after it. Reading it as local time or as UTC+9:30 gets one day wrong.
     """
-    rows = ["100,NEM12,202610060000,SAPN,GLOBIRD", "200,2001234567,E1B1,E1,E1,N1,900000001,kWh,30,"]
-    for day, slot in (("20260928", 32), ("20261005", 31)):  # 16:00 and 15:30 NEM time
-        values = ["0"] * 48
-        values[slot] = "1.0"
-        rows.append(f"300,{day},{','.join(values)},A,,,20261006000000,")
-    await backfill(hass, "\n".join([*rows, "900"]) + "\n")
+    await backfill(hass, tiny_nem12({"20260928": {32: 1.0}, "20261005": {31: 1.0}}))
     for day, band in (("2026-09-28", "Shoulder Usage"), ("2026-10-05", "Peak Usage")):
         response = await hass.services.async_call(
             DOMAIN, "bill_report", {"start_date": day, "end_date": day},
@@ -163,6 +169,17 @@ async def test_nem12_stays_on_nem_time_through_daylight_saving(hass, entry):
         quantities = {line["description"]: line["quantity"] for line in response["lines"]}
         assert quantities[band] == 1.0, (day, quantities)
         assert quantities["Peak Usage"] + quantities["Shoulder Usage"] == 1.0, (day, quantities)
+
+
+async def test_bill_period_is_whole_nem12_dates(hass, entry):
+    """A bill for 10 Sep covers NEM12 10 Sep, which is 23:30 9 Sep to 23:30 10 Sep in Adelaide."""
+    await backfill(hass, tiny_nem12({"20260910": {0: 1.0}, "20260911": {0: 2.0}}))
+    response = await hass.services.async_call(
+        DOMAIN, "bill_report", {"start_date": "2026-09-10", "end_date": "2026-09-10"},
+        blocking=True, return_response=True,
+    )
+    assert response["metered"]["import_kwh"] == 1.0
+    assert response["incomplete_days"] == []
 
 
 async def test_sensors_report_data_and_success(hass, entry, nem12_text):
