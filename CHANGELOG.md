@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- ZeroHero is judged on the whole 6pm to 9pm window: under 0.09 kWh (0.03 kWh an hour averaged), not under 0.03 kWh in every hour. The per-hour test credited 14 of the 19 nights on GloBird's September 2026 invoice; GloBird credited nights with up to 0.045 kWh in one hour.
+- `bill_report` returns every night's import and export by hour and by half hour under `zerohero.nights`, and each missed night's window total.
+
 ## 0.2.1
 
 - A credit that rounds to nothing totals $0.00, not -$0.00, so cards stop showing "$-0.00".

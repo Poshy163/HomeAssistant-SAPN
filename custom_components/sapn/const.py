@@ -40,6 +40,7 @@ SUPER_WINDOW: Final = (18, 21)
 SUPER_TOPUP: Final = 0.08
 SUPER_DAILY_CAP_KWH: Final = 15.0
 ZEROHERO_WINDOW: Final = (18, 21)
+# Averaged over the window: a night earns under 0.03 kWh/hour x 3 hours = 0.09 kWh.
 ZEROHERO_MAX_KWH_PER_HOUR: Final = 0.03
 ZEROHERO_CREDIT: Final = 1.00
 GST_DIVISOR: Final = 1.1

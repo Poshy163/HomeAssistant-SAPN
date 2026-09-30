@@ -45,7 +45,7 @@ Thirteen statistics per meter, named `sapn:<nmi>_<key>`. Find them in Developer 
 | `export_super` (first 15 kWh a day in 6pm to 9pm) | `zerohero_credit` |
 | | `bill_total` |
 
-The change in `bill_total` over a billing period is the invoice total. ZeroHero follows GloBird's rule, judged on the retailer's meter: under 0.03 kWh drawn in each hour from 6pm to 9pm.
+The change in `bill_total` over a billing period is the invoice total. ZeroHero follows GloBird's rule, judged on the retailer's meter: under 0.03 kWh an hour averaged across 6pm to 9pm, so under 0.09 kWh for the whole window. One busy hour does not lose the night on its own. `sapn.bill_report` lists every night's import and export by hour and half hour, so you can check any credit GloBird gives or withholds.
 
 Sensors per meter:
 

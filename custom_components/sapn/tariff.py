@@ -43,12 +43,16 @@ class PricedInterval:
 
 @dataclass(slots=True)
 class ZeroHeroDay:
-    """GloBird's per-hour ZeroHero test for one local day."""
+    """GloBird's ZeroHero test for one local day, with the evidence behind it."""
 
     earned: bool
     complete: bool
-    hours: dict[int, float]
+    hours: dict[int, float]  # import kWh per local clock hour of the window
     worst_hour: int | None
+    total: float = 0.0  # import kWh across the whole window
+    exports: dict[int, float] = field(default_factory=dict)
+    export_total: float = 0.0
+    halves: dict[str, tuple[float, float]] = field(default_factory=dict)  # "18:30" -> (import, export)
 
 
 @dataclass
@@ -88,7 +92,9 @@ def price_intervals(
 
     super_used: dict[date, float] = defaultdict(float)
     zh_sums: dict[date, dict[int, float]] = defaultdict(lambda: defaultdict(float))
+    zh_exports: dict[date, dict[int, float]] = defaultdict(lambda: defaultdict(float))
     zh_counts: dict[date, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+    zh_halves: dict[date, dict[str, list[float]]] = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0]))
 
     for start, (imp, exp) in ordered:
         local = start.astimezone(local_tz)
@@ -119,16 +125,33 @@ def price_intervals(
         data.intervals.append(PricedInterval(start, day, hour, values))
         if ZEROHERO_WINDOW[0] <= hour < ZEROHERO_WINDOW[1]:
             zh_sums[day][hour] += imp
+            zh_exports[day][hour] += exp
             zh_counts[day][hour] += 1
+            half = zh_halves[day][f"{hour:02d}:{local.minute // 30 * 30:02d}"]
+            half[0] += imp
+            half[1] += exp
 
+    # GloBird's threshold is 0.03 kWh/hour averaged over the window, so a night
+    # earns the credit when the whole 6-9pm window draws under 0.09 kWh. One
+    # busy hour does not cost the night: GloBird credited 18 Sep 2026 with
+    # 0.045 kWh in its worst hour and missed 14 Sep with 0.041.
     needed = max(int(round(HOUR / step)), 1)
     window = range(ZEROHERO_WINDOW[0], ZEROHERO_WINDOW[1])
+    limit = round(ZEROHERO_MAX_KWH_PER_HOUR * len(window), 4)
     for day, sums in zh_sums.items():
         hours = {h: round(v, 4) for h, v in sums.items()}
+        exports = {h: round(v, 4) for h, v in zh_exports[day].items()}
+        total = round(sum(sums.values()), 4)
         complete = all(zh_counts[day].get(h, 0) >= needed for h in window)
-        earned = complete and all(hours.get(h, 0.0) < ZEROHERO_MAX_KWH_PER_HOUR for h in window)
+        earned = complete and total < limit
         worst = max(hours, key=lambda h: hours[h]) if hours else None
-        data.zerohero[day] = ZeroHeroDay(earned, complete, hours, worst)
+        halves = {
+            slot: (round(pair[0], 4), round(pair[1], 4))
+            for slot, pair in sorted(zh_halves[day].items())
+        }
+        data.zerohero[day] = ZeroHeroDay(
+            earned, complete, hours, worst, total, exports, round(sum(exports.values()), 4), halves
+        )
     return data
 
 
@@ -245,9 +268,28 @@ def bill_report(data: PricedData, first: date, last: date) -> dict[str, Any]:
         if counts.get(first + timedelta(days=n), 0) < per_day
     ]
     missed = [
-        {"date": d.isoformat(), "hour": v.worst_hour, "kwh": v.hours.get(v.worst_hour, 0.0)}
+        {
+            "date": d.isoformat(),
+            "kwh": v.total,
+            "hour": v.worst_hour,
+            "hour_kwh": v.hours.get(v.worst_hour, 0.0),
+        }
         for d, v in sorted(verdicts.items())
         if v.complete and not v.earned
+    ]
+    nights = [
+        {
+            "date": d.isoformat(),
+            "earned": v.earned,
+            "complete": v.complete,
+            "import_kwh": v.total,
+            "export_kwh": v.export_total,
+            "import_by_hour": {str(h): kwh for h, kwh in sorted(v.hours.items())},
+            "export_by_hour": {str(h): kwh for h, kwh in sorted(v.exports.items())},
+            "import_by_half_hour": {slot: pair[0] for slot, pair in v.halves.items()},
+            "export_by_half_hour": {slot: pair[1] for slot, pair in v.halves.items()},
+        }
+        for d, v in sorted(verdicts.items())
     ]
     return {
         "start_date": first.isoformat(),
@@ -262,6 +304,7 @@ def bill_report(data: PricedData, first: date, last: date) -> dict[str, Any]:
             "earned": [d.isoformat() for d in earned],
             "missed": missed,
             "pending": [d.isoformat() for d, v in sorted(verdicts.items()) if not v.complete],
+            "nights": nights,
         },
         "incomplete_days": incomplete,
     }

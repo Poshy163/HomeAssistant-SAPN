@@ -38,7 +38,7 @@ views:
               | Line | Quantity | Rate | Total |
               |:--|--:|--:|--:|
               {%- for l in lines %}
-              | {{ l.description }} | {{ ('%.2f' | format(l.quantity)) if l.unit == 'kWh' else l.quantity }} {{ l.unit }} | {{ rate(l.rate) }} | {{ money(l.total) }} |
+              | {{ l.description }} | {{ ('%.2f' | format(l.quantity)) if l.unit == 'kWh' else l.quantity }} {{ 'Day' if l.unit == 'Days' and l.quantity == 1 else l.unit }} | {{ rate(l.rate) }} | {{ money(l.total) }} |
               {%- endfor %}
               | **Total** (incl. {{ money(state_attr(e, 'gst')) }} GST) | | | **{{ money(states(e) | float(0)) }}** |
 
@@ -153,7 +153,7 @@ views:
               | Line | Quantity | Rate | Total |
               |:--|--:|--:|--:|
               {%- for l in lines %}
-              | {{ l.description }} | {{ ('%.2f' | format(l.quantity)) if l.unit == 'kWh' else l.quantity }} {{ l.unit }} | {{ rate(l.rate) }} | {{ money(l.total) }} |
+              | {{ l.description }} | {{ ('%.2f' | format(l.quantity)) if l.unit == 'kWh' else l.quantity }} {{ 'Day' if l.unit == 'Days' and l.quantity == 1 else l.unit }} | {{ rate(l.rate) }} | {{ money(l.total) }} |
               {%- endfor %}
               | **Total** (incl. {{ money(state_attr(e, 'gst')) }} GST) | | | **{{ money(states(e) | float(0)) }}** |
               {%- else -%}
