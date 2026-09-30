@@ -171,6 +171,15 @@ def hourly_increments(data: PricedData, local_tz: tzinfo) -> dict[datetime, dict
     return hours
 
 
+def cycle_bounds(anchor: date, length: int, day: date) -> tuple[date, date]:
+    """First and last day of the billing cycle containing `day`.
+
+    `anchor` is any known cycle start; cycles repeat every `length` days either side.
+    """
+    start = day - timedelta(days=(day - anchor).days % length)
+    return start, start + timedelta(days=length - 1)
+
+
 def expected_intervals(day: date, local_tz: tzinfo, step: timedelta) -> int:
     """Intervals in a local day, allowing for 23 and 25 hour DST days."""
     length = local_midnight(day + timedelta(days=1), local_tz) - local_midnight(day, local_tz)

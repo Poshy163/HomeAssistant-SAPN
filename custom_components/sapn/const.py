@@ -10,12 +10,15 @@ CONF_NMI: Final = "nmi"
 CONF_NEM12_TZ: Final = "nem12_tz"
 CONF_DAYS_BACK: Final = "days_back"
 CONF_RUN_TIMES: Final = "run_times"
+CONF_CYCLE_START: Final = "cycle_start"
+CONF_CYCLE_DAYS: Final = "cycle_days"
 
 NEM12_TZ_OPTIONS: Final = ["+10:00", "+09:30"]
 DEFAULT_NEM12_TZ: Final = "+10:00"
 DEFAULT_DAYS_BACK: Final = 7
 DEFAULT_RUN_TIMES: Final = "10:15,22:15"
 STARTUP_DELAY_SECONDS: Final = 120
+DEFAULT_CYCLE_DAYS: Final = 28
 
 STORE_VERSION: Final = 1
 STORE_RETENTION_DAYS: Final = 400

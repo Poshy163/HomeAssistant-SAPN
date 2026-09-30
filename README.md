@@ -55,7 +55,17 @@ Thirteen statistics per meter, named `sapn:<nmi>_<key>`. Find them in Developer 
 
 The change in `bill_total` over a billing period is the invoice total. ZeroHero follows GloBird's rule, judged on the retailer's meter: under 0.03 kWh drawn in each hour from 6pm to 9pm.
 
-Two diagnostic sensors show **Data up to** and **Last successful import**. The second carries the last error, if any, as an attribute.
+Sensors per meter:
+
+| Sensor | Shows |
+|---|---|
+| Bill this cycle | The invoice so far for the current billing cycle, counting only days SAPN has fully published. Attributes carry every invoice line, the GST and the ZeroHero days. |
+| Projected bill | Bill this cycle scaled to the full cycle length. |
+| Last bill | The previous full cycle, with the same attributes. Compare it with GloBird's invoice. |
+| ZeroHero days this cycle | Nights earned so far, with the earned and missed dates as attributes. |
+| Data up to, Last successful import | Diagnostics. The second carries the last error, if any. |
+
+The four billing sensors stay unknown until you set **Billing cycle start** under **Configure**.
 
 ## Actions
 
@@ -67,13 +77,23 @@ Two diagnostic sensors show **Data up to** and **Last successful import**. The s
 
 ## Schedule and settings
 
-It runs two minutes after start-up and at 10:15 and 22:15, re-importing the last 7 days each time so SAPN's corrections replace estimated reads. **Configure** changes the times, the re-import window and the timestamp basis. It keeps 400 days of interval data in `.storage`, so reports and rebuilds need no download.
+It runs two minutes after start-up and at 10:15 and 22:15, re-importing the last 7 days each time so SAPN's corrections replace estimated reads. **Configure** changes the times, the re-import window, the timestamp basis and the billing cycle. For the cycle, enter any bill's start date and the cycle length; GloBird bills every 28 days. It keeps 400 days of interval data in `.storage`, so reports and rebuilds need no download.
 
 If SAPN rejects the stored password, Home Assistant raises a repair asking you to sign in again. Home Assistant keeps the password in the config entry, as it does for every integration that signs in to a cloud account, so give SAPN a password you use nowhere else.
 
 Rates and windows live in `custom_components/sapn/const.py`. Edit them when GloBird changes the plan. Windows follow local clock time, so daylight saving needs no change unless GloBird moves the windows. Your bill labels the free window "Offpeak Usage - Step 1"; if a Step 2 line appears, GloBird has capped it and `const.py` needs the cap.
 
 Home Assistant stores hourly statistics on UTC hours, which run from :30 to :30 in Adelaide, so daily figures in Home Assistant shift by half an hour at midnight. `sapn.bill_report` works from the raw intervals and matches the bill exactly.
+
+## Dashboard
+
+`examples/electricity-bill-dashboard.yaml` is a ready-made dashboard: the bill so far laid out like a GloBird invoice, the last bill, live estimates for today, daily charts of cost, import by band, export by window and ZeroHero credits, and a check of SAPN's figures against your inverter's meter.
+
+1. Replace `20012345678` with your NMI and `2001234567` with its first ten digits.
+2. Settings → Dashboards → Add dashboard → New dashboard from scratch, and open it.
+3. ⋮ → Edit dashboard → ⋮ → Raw configuration editor, paste the file, save.
+
+The "Today" section reads the live tariff sensors from the author's own setup. Delete that section if you do not have them.
 
 ## Development
 

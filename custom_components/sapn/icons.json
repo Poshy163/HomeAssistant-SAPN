@@ -1,0 +1,35 @@
+{
+  "entity": {
+    "sensor": {
+      "bill_this_cycle": {
+        "default": "mdi:receipt-text-clock"
+      },
+      "projected_bill": {
+        "default": "mdi:chart-timeline-variant"
+      },
+      "last_bill": {
+        "default": "mdi:receipt-text-check"
+      },
+      "zerohero_this_cycle": {
+        "default": "mdi:cash-plus"
+      },
+      "data_through": {
+        "default": "mdi:database-clock"
+      },
+      "last_success": {
+        "default": "mdi:cloud-check"
+      }
+    }
+  },
+  "services": {
+    "fetch": {
+      "service": "mdi:cloud-download"
+    },
+    "import_file": {
+      "service": "mdi:file-import"
+    },
+    "bill_report": {
+      "service": "mdi:receipt-text"
+    }
+  }
+}

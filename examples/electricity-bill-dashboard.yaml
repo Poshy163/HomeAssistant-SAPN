@@ -1,0 +1,186 @@
+title: Electricity bill
+views:
+  - title: Bill
+    path: bill
+    icon: mdi:receipt-text
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: This cycle
+            heading_style: title
+          - type: tile
+            entity: sensor.sapn_meter_20012345678_bill_this_cycle
+            name: Bill so far
+          - type: tile
+            entity: sensor.sapn_meter_20012345678_projected_bill
+            name: Projected
+          - type: tile
+            entity: sensor.sapn_meter_20012345678_zerohero_days_this_cycle
+            name: ZeroHero days
+          - type: tile
+            entity: sensor.sapn_meter_20012345678_last_bill
+            name: Last bill
+          - type: markdown
+            grid_options:
+              columns: full
+            content: |-
+              {%- set e = 'sensor.sapn_meter_20012345678_bill_this_cycle' -%}
+              {%- set lines = state_attr(e, 'lines') -%}
+              {%- macro money(v) -%}{{ ('-$%.2f' | format(-v)) if v < 0 else ('$%.2f' | format(v)) }}{%- endmacro -%}
+              {%- macro rate(v) -%}{{ ('-$%.5f' | format(-v)) if v < 0 else ('$%.5f' | format(v)) }}{%- endmacro -%}
+              {%- macro day(d) -%}{{ strptime(d, '%Y-%m-%d').strftime('%-d %b') }}{%- endmacro -%}
+              {%- if lines -%}
+              **{{ day(state_attr(e, 'cycle_start')) }} to {{ day(state_attr(e, 'cycle_end')) }}** · {{ state_attr(e, 'days') }} of {{ state_attr(e, 'days_in_cycle') }} days billed · SAPN data to {{ day(state_attr(e, 'data_to')) if state_attr(e, 'data_to') else 'none yet' }}
+
+              | Line | Quantity | Rate | Total |
+              |:--|--:|--:|--:|
+              {%- for l in lines %}
+              | {{ l.description }} | {{ ('%.2f' | format(l.quantity)) if l.unit == 'kWh' else l.quantity }} {{ l.unit }} | {{ rate(l.rate) }} | {{ money(l.total) }} |
+              {%- endfor %}
+              | **Total** (incl. {{ money(state_attr(e, 'gst')) }} GST) | | | **{{ money(states(e) | float(0)) }}** |
+
+              Metered import {{ '%.2f' | format(state_attr(e, 'import_kwh')) }} kWh, export {{ '%.2f' | format(state_attr(e, 'export_kwh')) }} kWh. {%- set missed = state_attr(e, 'zerohero_missed') or [] %} ZeroHero missed: {% for d in missed %}{{ day(d) }}{{ ', ' if not loop.last }}{% endfor %}{{ 'none' if not missed }}.
+              {%- else -%}
+              No billing cycle yet. Set **Billing cycle start** under the SAPN integration's **Configure**.
+              {%- endif %}
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Today (live estimate)
+            heading_style: title
+          - type: tile
+            entity: sensor.electricity_cost_today
+            name: Cost today
+          - type: tile
+            entity: sensor.zerohero_status
+            name: ZeroHero
+          - type: tile
+            entity: sensor.grid_import_price
+            name: Import price
+          - type: tile
+            entity: sensor.grid_export_price
+            name: Export price
+          - type: markdown
+            grid_options:
+              columns: full
+            content: >-
+              Live figures come from the AlphaESS meter and read about 2% low on import.
+              SAPN's figures above are what GloBird bills, and arrive a day later.
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Daily, from SAPN
+            heading_style: title
+          - type: statistics-graph
+            title: Daily bill
+            grid_options:
+              columns: full
+            chart_type: bar
+            period: day
+            days_to_show: 35
+            stat_types:
+              - change
+            entities:
+              - entity: sapn:2001234567_bill_total
+                name: Bill
+          - type: statistics-graph
+            title: Grid import by band
+            grid_options:
+              columns: full
+            chart_type: bar
+            period: day
+            days_to_show: 35
+            stat_types:
+              - change
+            entities:
+              - entity: sapn:2001234567_import_peak
+                name: Peak
+              - entity: sapn:2001234567_import_shoulder
+                name: Shoulder
+              - entity: sapn:2001234567_import_offpeak
+                name: Offpeak (free)
+          - type: statistics-graph
+            title: Grid export by window
+            grid_options:
+              columns: full
+            chart_type: bar
+            period: day
+            days_to_show: 35
+            stat_types:
+              - change
+            entities:
+              - entity: sapn:2001234567_export_super
+                name: 6-9pm super top-up
+              - entity: sapn:2001234567_export_4pm_11pm
+                name: 4-11pm ($0.02)
+              - entity: sapn:2001234567_export_11pm_4pm
+                name: 11pm-4pm ($0.00)
+          - type: statistics-graph
+            title: ZeroHero credits
+            grid_options:
+              columns: full
+            chart_type: bar
+            period: day
+            days_to_show: 35
+            stat_types:
+              - change
+            entities:
+              - entity: sapn:2001234567_zerohero_credit
+                name: Credit
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Last bill
+            heading_style: title
+          - type: markdown
+            grid_options:
+              columns: full
+            content: |-
+              {%- set e = 'sensor.sapn_meter_20012345678_last_bill' -%}
+              {%- set lines = state_attr(e, 'lines') -%}
+              {%- macro money(v) -%}{{ ('-$%.2f' | format(-v)) if v < 0 else ('$%.2f' | format(v)) }}{%- endmacro -%}
+              {%- macro rate(v) -%}{{ ('-$%.5f' | format(-v)) if v < 0 else ('$%.5f' | format(v)) }}{%- endmacro -%}
+              {%- macro day(d) -%}{{ strptime(d, '%Y-%m-%d').strftime('%-d %b') }}{%- endmacro -%}
+              {%- if lines -%}
+              **{{ day(state_attr(e, 'start_date')) }} to {{ day(state_attr(e, 'end_date')) }}**{{ '' if state_attr(e, 'complete') else ' · still waiting on SAPN data' }}
+
+              | Line | Quantity | Rate | Total |
+              |:--|--:|--:|--:|
+              {%- for l in lines %}
+              | {{ l.description }} | {{ ('%.2f' | format(l.quantity)) if l.unit == 'kWh' else l.quantity }} {{ l.unit }} | {{ rate(l.rate) }} | {{ money(l.total) }} |
+              {%- endfor %}
+              | **Total** (incl. {{ money(state_attr(e, 'gst')) }} GST) | | | **{{ money(states(e) | float(0)) }}** |
+              {%- else -%}
+              No previous cycle yet.
+              {%- endif %}
+          - type: heading
+            heading: Meter check
+            heading_style: subtitle
+          - type: statistics-graph
+            title: Grid import, SAPN vs AlphaESS
+            grid_options:
+              columns: full
+            chart_type: line
+            period: day
+            days_to_show: 35
+            stat_types:
+              - change
+            entities:
+              - entity: sapn:2001234567_grid_import
+                name: SAPN (billed)
+              - entity: sensor.alphaess_total_energy_consumption_from_grid_meter
+                name: AlphaESS CT
+          - type: entities
+            grid_options:
+              columns: full
+            entities:
+              - entity: sensor.sapn_meter_20012345678_data_up_to
+                name: SAPN data up to
+              - entity: sensor.sapn_meter_20012345678_last_successful_import
+                name: Last successful import

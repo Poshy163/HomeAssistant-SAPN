@@ -17,6 +17,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    DateSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -28,10 +29,13 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_CYCLE_DAYS,
+    CONF_CYCLE_START,
     CONF_DAYS_BACK,
     CONF_NEM12_TZ,
     CONF_NMI,
     CONF_RUN_TIMES,
+    DEFAULT_CYCLE_DAYS,
     DEFAULT_DAYS_BACK,
     DEFAULT_NEM12_TZ,
     DEFAULT_RUN_TIMES,
@@ -159,6 +163,7 @@ class SapnOptionsFlow(OptionsFlow):
                 errors[CONF_RUN_TIMES] = "invalid_run_times"
             else:
                 user_input[CONF_DAYS_BACK] = int(user_input[CONF_DAYS_BACK])
+                user_input[CONF_CYCLE_DAYS] = int(user_input[CONF_CYCLE_DAYS])
                 return self.async_create_entry(data=user_input)
         options = self.config_entry.options
         schema = vol.Schema(
@@ -174,6 +179,15 @@ class SapnOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_RUN_TIMES, default=options.get(CONF_RUN_TIMES, DEFAULT_RUN_TIMES)
                 ): TextSelector(),
+                vol.Optional(
+                    CONF_CYCLE_START,
+                    description={"suggested_value": options.get(CONF_CYCLE_START)},
+                ): DateSelector(),
+                vol.Required(
+                    CONF_CYCLE_DAYS, default=options.get(CONF_CYCLE_DAYS, DEFAULT_CYCLE_DAYS)
+                ): NumberSelector(
+                    NumberSelectorConfig(min=7, max=93, step=1, mode=NumberSelectorMode.BOX)
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
