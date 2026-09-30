@@ -172,6 +172,11 @@ def hourly_increments(data: PricedData, local_tz: tzinfo) -> dict[datetime, dict
     return hours
 
 
+def cents(value: float) -> float:
+    """Round to the cent. Adding 0.0 turns -0.0 (a credit that rounds away) into 0.0."""
+    return round(value, 2) + 0.0
+
+
 def nem_date(moment: datetime) -> date:
     """The NEM12 date an interval starting at `moment` is filed under."""
     return moment.astimezone(NEM_TIME).date()
@@ -222,16 +227,15 @@ def bill_report(data: PricedData, first: date, last: date) -> dict[str, Any]:
         ("ZeroHero", len(earned), "Days", -ZEROHERO_CREDIT),
     ]
     priced_lines = [
-        {"description": d, "quantity": q, "unit": u, "rate": r, "total": round(q * r, 2)}
+        {"description": d, "quantity": q, "unit": u, "rate": r, "total": cents(q * r)}
         for d, q, u, r in lines
     ]
-    grand_total = round(sum(line["total"] for line in priced_lines), 2)
+    grand_total = cents(sum(line["total"] for line in priced_lines))
     # GloBird's GST: GST-inclusive line totals minus ex-GST line totals, each rounded.
     charged = [(days, SUPPLY_PER_DAY), (qty["peak"], peak_rate), (qty["shoulder"], SHOULDER_RATE)]
-    gst = round(
+    gst = cents(
         sum(round(q * r, 2) for q, r in charged)
-        - sum(round(q * r / GST_DIVISOR, 2) for q, r in charged),
-        2,
+        - sum(round(q * r / GST_DIVISOR, 2) for q, r in charged)
     )
     counts = Counter(nem_date(i.utc) for i in part)
     per_day = int(round(timedelta(days=1) / data.step))  # NEM time has no daylight saving

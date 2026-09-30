@@ -1,5 +1,6 @@
 """Imports into a real recorder, re-runs, file imports, the bill report and sensors."""
 
+import math
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -151,6 +152,18 @@ async def test_bill_report_matches_engine(hass, entry, nem12_text):
     expected = bill_report(engine(nem12_text), date(2026, 8, 31), date(2026, 9, 27))
     assert {k: v for k, v in response.items() if k != "nmi"} == expected
     assert response["days"] == 28 and response["incomplete_days"] == []
+
+
+def test_credits_that_round_away_are_zero_not_negative_zero():
+    """0.04 kWh of super export earns -$0.0032, which must total 0.0, not -0.0 ("$-0.00")."""
+    six_pm = datetime(2026, 9, 28, 18, 0, tzinfo=ADL)
+    priced = price_intervals([(six_pm.astimezone(UTC), 0.0, 0.04)], ADL)
+    report = bill_report(priced, date(2026, 9, 28), date(2026, 9, 28))
+    lines = {line["description"]: line for line in report["lines"]}
+    assert lines["Super Export top up"]["quantity"] == 0.04
+    assert lines["ZeroHero"]["quantity"] == 0  # 0 days * -$1 is -0.0 too
+    for line in lines.values():
+        assert not (line["total"] == 0 and math.copysign(1.0, line["total"]) < 0), line
 
 
 async def test_nem12_stays_on_nem_time_through_daylight_saving(hass, entry):

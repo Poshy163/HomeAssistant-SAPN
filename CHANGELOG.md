@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- A credit that rounds to nothing totals $0.00, not -$0.00, so cards stop showing "$-0.00".
+
 ## 0.2.0
 
 - Billing cycle options: cycle start date and length.
