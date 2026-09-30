@@ -66,3 +66,33 @@ def test_bill_report_lists_every_night_with_hourly_import_and_export():
     assert round(halves["18:00"] + halves["18:30"], 4) == 0.045
     assert round(sum(nights[0]["export_by_half_hour"].values()), 4) == 0.3
     assert report["zerohero"]["earned"] == ["2026-09-18"]
+
+
+def test_rounding_is_half_up_like_the_invoice():
+    from custom_components.sapn.tariff import cents, half_up
+
+    assert half_up(1.835) == 1.84  # September 2026 super export
+    assert half_up(1.8349999999999) == 1.84  # the same value after float summing
+    assert half_up(1.817) == 1.82  # August 2026
+    assert half_up(2.675) == 2.68  # round() gives 2.67
+    assert cents(-0.1456) == -0.15
+    assert cents(-0.004) == 0.0 and str(cents(-0.004)) == "0.0"
+
+
+def test_super_export_quantity_rounds_half_up():
+    day = date(2026, 9, 18)
+    start = datetime.combine(day, datetime.min.time(), ADL).astimezone(UTC)
+    intervals = []
+    window = 0
+    for n in range(288):
+        moment = start + n * STEP
+        if 18 <= moment.astimezone(ADL).hour < 21:
+            window += 1
+            exp = 0.05 if window == 36 else 0.051  # 35 x 0.051 + 0.05 = 1.835 kWh
+        else:
+            exp = 0.0
+        intervals.append((moment, 0.0, exp))
+    report = bill_report(price_intervals(intervals, ADL), day, day)
+    super_line = next(line for line in report["lines"] if line["description"] == "Super Export top up")
+    assert super_line["quantity"] == 1.84
+    assert super_line["total"] == -0.15

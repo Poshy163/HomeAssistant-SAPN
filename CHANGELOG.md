@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+- Quantities, money and GST round half up, as GloBird's invoices do. September 2026's super export (1.835 kWh) now reads 1.84 like the invoice instead of 1.83. The dollars were already right.
+
 ## 0.2.2
 
 - ZeroHero is judged on the whole 6pm to 9pm window: under 0.09 kWh (0.03 kWh an hour averaged), not under 0.03 kWh in every hour. The per-hour test credited 14 of the 19 nights on GloBird's September 2026 invoice; GloBird credited nights with up to 0.045 kWh in one hour.
