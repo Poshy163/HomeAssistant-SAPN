@@ -10,6 +10,8 @@ DOMAIN: Final = "sapn"
 CONF_NMI: Final = "nmi"
 CONF_DAYS_BACK: Final = "days_back"
 CONF_RUN_TIMES: Final = "run_times"
+CONF_CYCLE_START: Final = "cycle_start"
+CONF_CYCLE_DAYS: Final = "cycle_days"
 
 # AEMO's meter data file format puts NEM12 interval times on NEM time (AEST,
 # UTC+10) all year, with no daylight saving, in every NEM state including SA.
@@ -19,6 +21,7 @@ NEM_TIME: Final = timezone(timedelta(hours=10), "AEST")
 DEFAULT_DAYS_BACK: Final = 7
 DEFAULT_RUN_TIMES: Final = "10:15,22:15"
 STARTUP_DELAY_SECONDS: Final = 120
+DEFAULT_CYCLE_DAYS: Final = 28
 
 STORE_VERSION: Final = 1
 STORE_RETENTION_DAYS: Final = 400

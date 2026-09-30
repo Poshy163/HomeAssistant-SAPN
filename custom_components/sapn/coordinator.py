@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import TYPE_CHECKING, Any
@@ -15,8 +16,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CYCLE_DAYS,
+    CONF_CYCLE_START,
     CONF_DAYS_BACK,
     CONF_NMI,
+    DEFAULT_CYCLE_DAYS,
     DEFAULT_DAYS_BACK,
     DOMAIN,
     EXPORT_SUFFIX,
@@ -28,7 +32,16 @@ from .const import (
 from .importer import async_import, async_last_day
 from .nem12 import Nem12Error, nem12_days, parse_nem12
 from .portal import SapnAuthError, SapnError, fetch_nem12
-from .tariff import bill_report, ceil_hour, floor_hour, hourly_increments, local_midnight, price_intervals
+from .tariff import (
+    bill_report,
+    ceil_hour,
+    cycle_bounds,
+    floor_hour,
+    hourly_increments,
+    local_midnight,
+    nem_date,
+    price_intervals,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -55,6 +68,9 @@ class SapnStatus:
     import_first: datetime | None = None
     import_last: datetime | None = None
     error: str | None = None
+    cycle: dict[str, Any] | None = None
+    previous_cycle: dict[str, Any] | None = None
+    projected_total: float | None = None
 
 
 class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
@@ -82,6 +98,15 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
     def days_back(self) -> int:
         return int(self.config_entry.options.get(CONF_DAYS_BACK, DEFAULT_DAYS_BACK))
 
+    @property
+    def cycle_anchor(self) -> date | None:
+        value = self.config_entry.options.get(CONF_CYCLE_START)
+        return date.fromisoformat(value) if value else None
+
+    @property
+    def cycle_days(self) -> int:
+        return int(self.config_entry.options.get(CONF_CYCLE_DAYS, DEFAULT_CYCLE_DAYS))
+
     async def _async_update_data(self) -> SapnStatus:
         return self.status
 
@@ -92,6 +117,7 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
         if last := stored.get("last_success"):
             self.status.last_success = dt_util.parse_datetime(last)
         self.status.data_through = self._data_through()
+        await self._async_update_cycles()
         self.data = self.status
 
     def _data_through(self) -> datetime | None:
@@ -146,6 +172,57 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
                 out.append((start, imp or 0.0, exp or 0.0))
         return out
 
+    # ---------------------------------------------------------------- cycles
+    def _compute_cycles(
+        self, today: date, local_tz: tzinfo
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, float | None]:
+        """Bill so far this cycle, the previous full cycle, and a projection.
+
+        Only NEM12 dates with every interval count, so SAPN's one-day lag never
+        shows up as a half-billed day.
+        """
+        anchor, length = self.cycle_anchor, self.cycle_days
+        if anchor is None or not self._days:
+            return None, None, None
+        start, end = cycle_bounds(anchor, length, today)
+        previous_start = start - timedelta(days=length)
+        intervals = self._intervals(previous_start - timedelta(days=2), None)
+        if not intervals:
+            return None, None, None
+        priced = price_intervals(intervals, local_tz)
+        counts = Counter(nem_date(interval.utc) for interval in priced.intervals)
+        per_day = int(round(timedelta(days=1) / priced.step))
+        last_complete = next(
+            (
+                day
+                for day in (today - timedelta(days=n) for n in range(2 * length + 1))
+                if counts.get(day, 0) >= per_day
+            ),
+            None,
+        )
+        if last_complete is None:
+            return None, None, None
+        current = bill_report(priced, start, min(last_complete, end))
+        current.update(
+            cycle_start=start.isoformat(),
+            cycle_end=end.isoformat(),
+            days_in_cycle=length,
+            data_to=last_complete.isoformat() if last_complete >= start else None,
+        )
+        projected = round(current["total"] / current["days"] * length, 2) if current["days"] > 0 else None
+        previous = bill_report(priced, previous_start, start - timedelta(days=1))
+        previous["complete"] = not previous["incomplete_days"]
+        return current, previous, projected
+
+    async def _async_update_cycles(self) -> None:
+        local_tz = dt_util.get_default_time_zone()
+        current, previous, projected = await self.hass.async_add_executor_job(
+            self._compute_cycles, dt_util.now().date(), local_tz
+        )
+        self.status.cycle = current
+        self.status.previous_cycle = previous
+        self.status.projected_total = projected
+
     # ------------------------------------------------------------------ runs
     async def async_fetch(self, start: date | None = None, download: bool = True) -> SapnStatus:
         """Download (optionally) and import from `start`, or from DAYS_BACK ago."""
@@ -181,6 +258,7 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
                 self.status.last_success = dt_util.utcnow()
             self.status.data_through = self._data_through()
             await self._async_save()
+            await self._async_update_cycles()
             self.async_set_updated_data(self.status)
             return self.status
 
@@ -201,6 +279,7 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
             finally:
                 self.status.data_through = self._data_through()
                 await self._async_save()
+                await self._async_update_cycles()
                 self.async_set_updated_data(self.status)
             return self.status
 

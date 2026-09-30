@@ -177,6 +177,15 @@ def nem_date(moment: datetime) -> date:
     return moment.astimezone(NEM_TIME).date()
 
 
+def cycle_bounds(anchor: date, length: int, day: date) -> tuple[date, date]:
+    """First and last day of the billing cycle containing `day`.
+
+    `anchor` is any known cycle start; cycles repeat every `length` days either side.
+    """
+    start = day - timedelta(days=(day - anchor).days % length)
+    return start, start + timedelta(days=length - 1)
+
+
 def bill_report(data: PricedData, first: date, last: date) -> dict[str, Any]:
     """Rebuild GloBird's invoice lines, GST and ZeroHero days for a period.
 

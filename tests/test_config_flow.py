@@ -71,11 +71,11 @@ async def test_options_validate_run_times(hass):
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"days_back": 7, "run_times": "ten past ten"}
+        result["flow_id"], {"days_back": 7, "run_times": "ten past ten", "cycle_start": "2026-08-03", "cycle_days": 28}
     )
     assert result["errors"] == {"run_times": "invalid_run_times"}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"days_back": 7, "run_times": "10:15,22:15"}
+        result["flow_id"], {"days_back": 7, "run_times": "10:15,22:15", "cycle_start": "2026-08-03", "cycle_days": 28}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options == {"days_back": 7, "run_times": "10:15,22:15"}
+    assert entry.options == {"days_back": 7, "run_times": "10:15,22:15", "cycle_start": "2026-08-03", "cycle_days": 28}

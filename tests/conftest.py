@@ -20,5 +20,5 @@ def auto_enable_custom_integrations(recorder_mock, enable_custom_integrations):
 
 @pytest.fixture
 def nem12_text() -> str:
-    """Synthetic NEM12 labelled in market time (UTC+10), 29 Aug to 28 Sep 2026."""
+    """Synthetic NEM12 labelled in market time (UTC+10), 29 Aug to 29 Sep 2026."""
     return FIXTURE.read_text()
