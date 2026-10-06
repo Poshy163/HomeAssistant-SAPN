@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
+from functools import partial
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -11,15 +13,16 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SapnConfigEntry
-from .const import CURRENCY, DOMAIN
+from .const import CURRENCY, DOMAIN, ZEROHERO_MAX_KWH_PER_HOUR, ZEROHERO_WINDOW
 from .coordinator import SapnCoordinator, SapnStatus
+from .tariff import cents
 
 
 def _bill_attributes(report: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -69,6 +72,69 @@ def _import_attributes(status: SapnStatus) -> dict[str, Any]:
     }
 
 
+def _cycle_period_attributes(status: SapnStatus) -> dict[str, Any] | None:
+    if status.cycle is None:
+        return None
+    return {
+        key: status.cycle[key]
+        for key in ("cycle_start", "cycle_end", "data_to", "days", "incomplete_days")
+    }
+
+
+def _cycle_meter_value(status: SapnStatus, key: str) -> float | None:
+    return status.cycle["metered"][key] if status.cycle is not None else None
+
+
+def _cycle_line_value(
+    status: SapnStatus, descriptions: tuple[str, ...], field: str, multiplier: int = 1
+) -> float | None:
+    if status.cycle is None:
+        return None
+    return cents(
+        multiplier * sum(
+            line[field] for line in status.cycle["lines"] if line["description"] in descriptions
+        )
+    )
+
+
+def _day_attributes(status: SapnStatus) -> dict[str, Any] | None:
+    if status.latest_day is None:
+        return None
+    return {
+        "date": status.latest_day["start_date"],
+        "period_start": status.latest_day["period_start"],
+        "period_end": status.latest_day["period_end"],
+    }
+
+
+def _latest_night(status: SapnStatus) -> dict[str, Any] | None:
+    if status.latest_day is None:
+        return None
+    return next(iter(status.latest_day["zerohero"]["nights"]), None)
+
+
+def _zerohero_result(status: SapnStatus) -> str | None:
+    if status.latest_day is None:
+        return None
+    night = _latest_night(status)
+    if night is None or not night["complete"]:
+        return "pending"
+    return "earned" if night["earned"] else "missed"
+
+
+def _zerohero_attributes(status: SapnStatus) -> dict[str, Any] | None:
+    attributes = _day_attributes(status)
+    if attributes is None:
+        return None
+    return {
+        **attributes,
+        "threshold_kwh": round(
+            ZEROHERO_MAX_KWH_PER_HOUR * (ZEROHERO_WINDOW[1] - ZEROHERO_WINDOW[0]), 4
+        ),
+        **(_latest_night(status) or {}),
+    }
+
+
 @dataclass(frozen=True, kw_only=True)
 class SapnSensorDescription(SensorEntityDescription):
     """Describes a SAPN sensor."""
@@ -78,6 +144,117 @@ class SapnSensorDescription(SensorEntityDescription):
 
 
 SENSORS = (
+    *(
+        SapnSensorDescription(
+            key=key,
+            translation_key=key,
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            value_fn=partial(_cycle_meter_value, key=meter_key),
+            attributes_fn=_cycle_period_attributes,
+        )
+        for key, meter_key in (
+            ("import_this_cycle", "import_kwh"),
+            ("export_this_cycle", "export_kwh"),
+        )
+    ),
+    *(
+        SapnSensorDescription(
+            key=key,
+            translation_key=key,
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            value_fn=partial(_cycle_line_value, descriptions=(description,), field="quantity"),
+            attributes_fn=_cycle_period_attributes,
+        )
+        for key, description in (
+            ("peak_import_this_cycle", "Peak Usage"),
+            ("offpeak_import_this_cycle", "Offpeak Usage"),
+            ("shoulder_import_this_cycle", "Shoulder Usage"),
+            ("paid_export_this_cycle", "Solar/Generation Feed in (4pm-11pm)"),
+            ("unpaid_export_this_cycle", "Solar/Generation Feed in (11pm-4pm)"),
+            ("super_export_this_cycle", "Super Export top up"),
+        )
+    ),
+    *(
+        SapnSensorDescription(
+            key=key,
+            translation_key=key,
+            device_class=SensorDeviceClass.MONETARY,
+            native_unit_of_measurement=CURRENCY,
+            suggested_display_precision=2,
+            value_fn=partial(
+                _cycle_line_value, descriptions=descriptions, field="total", multiplier=multiplier
+            ),
+            attributes_fn=_cycle_period_attributes,
+        )
+        for key, descriptions, multiplier in (
+            ("import_cost_this_cycle", ("Peak Usage", "Shoulder Usage"), 1),
+            (
+                "export_credit_this_cycle",
+                ("Solar/Generation Feed in (4pm-11pm)", "Super Export top up"),
+                -1,
+            ),
+            ("supply_charge_this_cycle", ("Daily Charge",), 1),
+            ("zerohero_credit_this_cycle", ("ZeroHero",), -1),
+        )
+    ),
+    SapnSensorDescription(
+        key="latest_complete_day",
+        translation_key="latest_complete_day",
+        device_class=SensorDeviceClass.DATE,
+        value_fn=lambda status: (
+            date.fromisoformat(status.latest_day["start_date"]) if status.latest_day else None
+        ),
+        attributes_fn=_day_attributes,
+    ),
+    *(
+        SapnSensorDescription(
+            key=key,
+            translation_key=key,
+            device_class=SensorDeviceClass.ENERGY,
+            native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+            suggested_display_precision=2,
+            value_fn=lambda status, meter_key=meter_key: (
+                status.latest_day["metered"][meter_key] if status.latest_day else None
+            ),
+            attributes_fn=_day_attributes,
+        )
+        for key, meter_key in (
+            ("import_latest_day", "import_kwh"),
+            ("export_latest_day", "export_kwh"),
+        )
+    ),
+    SapnSensorDescription(
+        key="cost_latest_day",
+        translation_key="cost_latest_day",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement=CURRENCY,
+        suggested_display_precision=2,
+        value_fn=lambda status: status.latest_day["total"] if status.latest_day else None,
+        attributes_fn=_day_attributes,
+    ),
+    SapnSensorDescription(
+        key="zerohero_latest_day",
+        translation_key="zerohero_latest_day",
+        device_class=SensorDeviceClass.ENUM,
+        options=["earned", "missed", "pending"],
+        value_fn=_zerohero_result,
+        attributes_fn=_zerohero_attributes,
+    ),
+    SapnSensorDescription(
+        key="zerohero_import_latest_day",
+        translation_key="zerohero_import_latest_day",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=3,
+        value_fn=lambda status: (
+            night["import_kwh"] if (night := _latest_night(status)) is not None else None
+        ),
+        attributes_fn=_zerohero_attributes,
+    ),
     SapnSensorDescription(
         key="bill_this_cycle",
         translation_key="bill_this_cycle",
@@ -158,7 +335,10 @@ class SapnSensor(CoordinatorEntity[SapnCoordinator], SensorEntity):
     _attr_has_entity_name = True
     # Invoice lines and date lists are for cards, not for history.
     _unrecorded_attributes = frozenset(
-        {"lines", "zerohero_earned", "zerohero_missed", "earned", "missed"}
+        {
+            "lines", "zerohero_earned", "zerohero_missed", "earned", "missed",
+            "import_by_hour", "export_by_hour", "import_by_half_hour", "export_by_half_hour",
+        }
     )
     entity_description: SapnSensorDescription
 

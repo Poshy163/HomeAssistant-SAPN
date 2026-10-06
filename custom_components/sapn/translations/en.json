@@ -58,6 +58,27 @@
   },
   "entity": {
     "sensor": {
+      "import_this_cycle": { "name": "Grid import this cycle" },
+      "export_this_cycle": { "name": "Grid export this cycle" },
+      "peak_import_this_cycle": { "name": "Peak import this cycle" },
+      "offpeak_import_this_cycle": { "name": "Free offpeak import this cycle" },
+      "shoulder_import_this_cycle": { "name": "Shoulder import this cycle" },
+      "paid_export_this_cycle": { "name": "Paid export this cycle" },
+      "unpaid_export_this_cycle": { "name": "Unpaid export this cycle" },
+      "super_export_this_cycle": { "name": "Super export this cycle" },
+      "import_cost_this_cycle": { "name": "Import cost this cycle" },
+      "export_credit_this_cycle": { "name": "Export credit this cycle" },
+      "supply_charge_this_cycle": { "name": "Supply charge this cycle" },
+      "zerohero_credit_this_cycle": { "name": "ZeroHero credit this cycle" },
+      "latest_complete_day": { "name": "Latest complete day" },
+      "import_latest_day": { "name": "Grid import latest day" },
+      "export_latest_day": { "name": "Grid export latest day" },
+      "cost_latest_day": { "name": "Cost latest day" },
+      "zerohero_latest_day": {
+        "name": "ZeroHero latest day",
+        "state": { "earned": "Earned", "missed": "Missed", "pending": "Pending" }
+      },
+      "zerohero_import_latest_day": { "name": "ZeroHero grid draw latest day" },
       "data_through": {
         "name": "Data up to"
       },

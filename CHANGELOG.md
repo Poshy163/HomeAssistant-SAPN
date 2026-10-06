@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Add 12 billing-cycle sensors for metered import and export, tariff bands, paid and unpaid export, super export, charges and credits.
+- Add six latest-day sensors for the complete NEM12 date, import, export, net cost, ZeroHero result and evening grid draw.
+- Latest-day summaries require every interval on both channels, skip unfinished dates, work without a billing-cycle setting, and load from the cache after a restart.
+- Show the daily period and local ZeroHero evidence as attributes. Existing statistics and sensor identities are preserved.
+
 ## 0.2.3
 
 - Quantities, money and GST round half up, as GloBird's invoices do. September 2026's super export (1.835 kWh) now reads 1.84 like the invoice instead of 1.83. The dollars were already right.

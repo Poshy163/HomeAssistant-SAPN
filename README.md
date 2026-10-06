@@ -55,9 +55,18 @@ Sensors per meter:
 | Projected bill | Bill this cycle scaled to the full cycle length. |
 | Last bill | The previous full cycle, with the same attributes. Compare it with GloBird's invoice. |
 | ZeroHero days this cycle | Nights earned so far, with the earned and missed dates as attributes. |
+| Grid import, Grid export this cycle | The current cycle's metered totals in kWh. |
+| Peak import, Free offpeak import, Shoulder import this cycle | Import split into the three tariff bands. |
+| Paid export, Unpaid export, Super export this cycle | Export in the paid and unpaid windows, and the quantity eligible for the super export top-up. Super export overlaps paid export. |
+| Import cost, Export credit, Supply charge, ZeroHero credit this cycle | Individual invoice components in AUD. Credits are positive amounts to subtract from the charges. |
+| Latest complete day | The newest finished NEM12 date with every import and export interval present. |
+| Grid import, Grid export, Cost latest day | Metered totals and net cost for that date, including supply and credits. |
+| ZeroHero latest day, ZeroHero grid draw latest day | Earned, missed or pending, and the grid draw in the local 6pm to 9pm window. Attributes include the date, threshold, and hourly and half-hourly evidence. |
 | Data up to, Last successful import | Diagnostics. The second carries the last error, if any. |
 
-The four billing sensors stay unknown until you set **Billing cycle start** under **Configure**.
+The billing-cycle sensors stay unknown until you set **Billing cycle start** under **Configure**. The latest-day sensors work without a cycle setting and retain the last complete day while newer data is still arriving. Their date and period attributes show exactly which published day they cover, including daylight saving.
+
+These sensors are snapshots of published meter data, rather than live power readings. They update after an import and when the integration loads its cache. Daily costs are rounded separately, so adding them can differ by a few cents from pricing the whole billing period at once. The existing 13 external statistics remain the source for historical energy charts and the Energy Dashboard; snapshots do not create a second set of accumulating statistics. See [Home Assistant's sensor guidance](https://developers.home-assistant.io/docs/core/entity/sensor/) for state-class semantics.
 
 ## Actions
 

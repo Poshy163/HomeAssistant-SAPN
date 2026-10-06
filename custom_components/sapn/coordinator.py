@@ -71,6 +71,7 @@ class SapnStatus:
     cycle: dict[str, Any] | None = None
     previous_cycle: dict[str, Any] | None = None
     projected_total: float | None = None
+    latest_day: dict[str, Any] | None = None
 
 
 class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
@@ -214,6 +215,38 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
         previous["complete"] = not previous["incomplete_days"]
         return current, previous, projected
 
+    def _compute_latest_day(self, now: datetime, local_tz: tzinfo) -> dict[str, Any] | None:
+        """Summarise the newest finished NEM12 day with both channels complete."""
+        for day_iso in sorted(self._days, reverse=True):
+            day = date.fromisoformat(day_iso)
+            end = datetime.combine(day + timedelta(days=1), time(), NEM_TIME)
+            if end > now:
+                continue
+            entry = self._days[day_iso]
+            expected = 1440 // entry["step"]
+            if any(
+                len(entry[channel]) != expected or any(value is None for value in entry[channel])
+                for channel in ("imp", "exp")
+            ):
+                continue
+            intervals = []
+            for offset in (-1, 0, 1):
+                neighbour = day + timedelta(days=offset)
+                cached = self._days.get(neighbour.isoformat())
+                if cached is None:
+                    continue
+                count = 1440 // cached["step"]
+                if any(len(cached[channel]) != count for channel in ("imp", "exp")):
+                    continue
+                intervals.extend(self._intervals(neighbour, neighbour))
+            report = bill_report(price_intervals(intervals, local_tz), day, day)
+            report["period_start"] = (
+                datetime.combine(day, time(), NEM_TIME).astimezone(local_tz).isoformat()
+            )
+            report["period_end"] = end.astimezone(local_tz).isoformat()
+            return report
+        return None
+
     async def _async_update_cycles(self) -> None:
         local_tz = dt_util.get_default_time_zone()
         current, previous, projected = await self.hass.async_add_executor_job(
@@ -222,6 +255,9 @@ class SapnCoordinator(DataUpdateCoordinator[SapnStatus]):
         self.status.cycle = current
         self.status.previous_cycle = previous
         self.status.projected_total = projected
+        self.status.latest_day = await self.hass.async_add_executor_job(
+            self._compute_latest_day, dt_util.utcnow(), local_tz
+        )
 
     # ------------------------------------------------------------------ runs
     async def async_fetch(self, start: date | None = None, download: bool = True) -> SapnStatus:
